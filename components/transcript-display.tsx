@@ -15,6 +15,9 @@ interface TranscriptDisplayProps {
 
 export function TranscriptDisplay({ transcription, summary, isLoading }: TranscriptDisplayProps) {
   const formatTime = (seconds: number): string => {
+    if (typeof seconds !== 'number' || isNaN(seconds)) {
+      return "00:00";
+    }
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -53,7 +56,6 @@ export function TranscriptDisplay({ transcription, summary, isLoading }: Transcr
       time_begin: number;
       time_end: number;
       text: string;
-      confidences: number[];
     }> = [];
     
     for (let i = 0; i < utterances.length; i++) {
@@ -83,13 +85,11 @@ export function TranscriptDisplay({ transcription, summary, isLoading }: Transcr
           time_begin: current.time_begin,
           time_end: current.time_end,
           text: text,
-          confidences: [current.confidence],
         });
       } else {
         // Same speaker, merge with previous group
         previous.time_end = current.time_end;
         previous.text = previous.text ? `${previous.text} ${text}` : text;
-        previous.confidences.push(current.confidence);
       }
     }
     
@@ -228,7 +228,6 @@ export function TranscriptDisplay({ transcription, summary, isLoading }: Transcr
           <ScrollArea className="h-96 w-full">
             <div className="space-y-6">
               {groupUtterancesBySpeaker().map((group, index) => {
-                const avgConfidence = group.confidences.reduce((a, b) => a + b, 0) / Math.max(1, group.confidences.length);
                 const speakerLabel = group.speaker || 'Unknown Speaker';
                 
                 return (
@@ -236,12 +235,6 @@ export function TranscriptDisplay({ transcription, summary, isLoading }: Transcr
                     <div className="flex items-center gap-3">
                       <Badge className={getSpeakerColor(speakerLabel)} variant="default">
                         {speakerLabel}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground font-medium">
-                        {formatTime(group.time_begin)} - {formatTime(group.time_end)}
-                      </span>
-                      <Badge variant="outline" className="text-xs">
-                        {Math.round(avgConfidence * 100)}% avg confidence
                       </Badge>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border-l-4 border-l-blue-500">
@@ -280,25 +273,6 @@ export function TranscriptDisplay({ transcription, summary, isLoading }: Transcr
           </CardContent>
         </Card>
       )}
-
-      {/* Debug: Raw Data Structure */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Debug: Raw Data Structure</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-64 w-full">
-            <pre className="text-xs text-muted-foreground bg-gray-100 dark:bg-gray-800 p-2 rounded">
-              {JSON.stringify({
-                utterancesCount: transcription.result.transcription.utterances.length,
-                firstUtterance: transcription.result.transcription.utterances[0],
-                fullTranscript: transcription.result.transcription.full_transcript,
-                speakers: transcription.result.speakers
-              }, null, 2)}
-            </pre>
-          </ScrollArea>
-        </CardContent>
-      </Card>
 
       {/* Full Transcript Text */}
       <Card>

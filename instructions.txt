@@ -1,0 +1,62 @@
+---
+applyTo: '**'
+---
+Provide project context and coding guidelines that AI should follow when generating code, answering questions, or reviewing changes.
+
+Search all the links properly and check what is to be implemented, dont genreate random code 
+
+I want to create an app which records audio, then sends the audio to
+gladia which transcribes the audio and generates transcripts with diarization. Make a pipeline which takes this generated transcript and feeds
+it to gemini which then generates the summary for the meeting.
+
+-the audio should be saved in a local directory for now, under audio recordings.
+
+Here are the links , please search them before implementing any code.
+Understand all the docs properly and the implement code accordingly
+
+I want to create a typescript serverless for backend
+and use next js for frontend.
+
+Here are the links : (whenever you are implementing any code please refer to these links)\
+
+To upload a file to gladia - https://docs.gladia.io/api-reference/v2/upload/audio-file
+
+For transcribing pre-recorded audio (initiate) - https://docs.gladia.io/api-reference/v2/pre-recorded/init
+
+To get the result of the pre-recorded audio -https://docs.gladia.io/api-reference/v2/pre-recorded/get
+
+(set diarization to true)
+
+To list all pre-recorded transcipt - https://docs.gladia.io/api-reference/v2/pre-recorded/list
+
+For entity detection using the recorded audio - https://docs.gladia.io/api-reference/v2/pre-recorded/init#body-named-entity-recognition
+(set true)
+
+The frontend should show A record audio button which will start the audio recording , a stop and a pause button.
+After stop the recording audio will stop and be saved locally. Then accordingly backend will proceed.
+It should have a sidebar
+The sidebar should show all the transcipts;
+search the api reference -https://docs.gladia.io/api-reference/v2/pre-recorded/list
+This will give you all the transcipts
+
+After the process it should show the transcipt below .
+Also the summary.
+
+Basically , recorded audio file should be sent to gladia which will transcribe , speaker diarization, and will
+do entity detection using the apis.
+
+On other thread simultaneously , after the transcipt is generated transcipt should be sent to the pipeline which will generate the summary
+
+If you have any questions please stop and ask before implementing any code.
+Use best practices for coding and structuring the project.
+Use typescript for backend and nextjs for frontend.
+Use Gemini api for generating the summary.
+Use environment variables for sensitive information like API keys.
+Ensure proper error handling and logging throughout the application.
+Use comments in the code to explain complex logic or decisions.
+Use Shadcn for components
+
+Design a beautiful thoughtfull UI which is user intutive .
+
+Use Webaudio api to capture the audio (I want a truly loseless audio so dont record in webm , wav will do it)
+DO NOT USE MEDIARECORDER 
