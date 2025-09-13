@@ -1,103 +1,302 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { AudioRecorderComponent } from '@/components/audio-recorder-component';
+import { TranscriptDisplay } from '@/components/transcript-display';
+import { TranscriptionSidebar } from '@/components/transcription-sidebar';
+import { GladiaTranscriptionResult } from '@/lib/gladia-service';
+import { MeetingSummary } from '@/lib/gemini-service';
+import { LocalStorageService, StoredTranscription } from '@/lib/local-storage';
+import { Toaster } from '@/components/ui/toaster';
+import { useToast } from '@/components/ui/toaster';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [currentTranscription, setCurrentTranscription] = useState<GladiaTranscriptionResult | null>(null);
+  const [currentSummary, setCurrentSummary] = useState<MeetingSummary | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedTranscriptionId, setSelectedTranscriptionId] = useState<string | undefined>();
+  const { toast } = useToast();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleRecordingComplete = async (audioBlob: Blob, filename: string) => {
+    setIsProcessing(true);
+    setCurrentTranscription(null);
+    setCurrentSummary(null);
+    
+    // Create initial transcription record in local storage
+    const transcriptionId = `trans_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    LocalStorageService.saveNewTranscription(
+      transcriptionId,
+      filename
+    );
+    
+    try {
+      // Step 1: Upload audio file
+      toast({
+        title: "Uploading audio...",
+        description: "Saving your recording and preparing for transcription.",
+      });
+
+      const formData = new FormData();
+      formData.append('audio', audioBlob, filename);
+      
+      const uploadResponse = await fetch('/api/upload-audio', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload audio');
+      }
+      
+      const uploadData = await uploadResponse.json();
+      
+      // Step 2: Start transcription
+      toast({
+        title: "Starting transcription...",
+        description: "Processing your audio with Gladia AI for transcription and speaker diarization.",
+      });
+
+      const transcribeResponse = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: uploadData.filename }),
+      });
+      
+      if (!transcribeResponse.ok) {
+        throw new Error('Failed to start transcription');
+      }
+      
+      const transcribeData = await transcribeResponse.json();
+      const requestId = transcribeData.requestId;
+      
+      console.log('Transcribe response data:', transcribeData);
+      console.log('Extracted requestId:', requestId);
+      
+      if (!requestId) {
+        throw new Error('No requestId received from transcription initiation');
+      }
+      
+      // Step 3: Poll for transcription completion
+      toast({
+        title: "Transcription in progress...",
+        description: "This may take a few minutes depending on audio length.",
+      });
+
+      let attempts = 0;
+      const maxAttempts = 60; // 5 minutes max
+      
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+        
+        console.log(`Attempt ${attempts + 1}: Polling for transcription result`);
+        console.log('Using requestId:', requestId);
+        console.log('Full URL:', `/api/transcribe?requestId=${requestId}`);
+        
+        const resultResponse = await fetch(`/api/transcribe?requestId=${requestId}`);
+        if (!resultResponse.ok) {
+          const errorText = await resultResponse.text();
+          console.error('Failed response:', resultResponse.status, errorText);
+          throw new Error(`Failed to get transcription result: ${resultResponse.status} ${errorText}`);
+        }
+        
+        const resultData = await resultResponse.json();
+        const result = resultData.result;
+        
+        if (result.status === 'done') {
+          setCurrentTranscription(result);
+          setSelectedTranscriptionId(transcriptionId);
+          
+          // Step 4: Generate summary in parallel
+          toast({
+            title: "Generating summary...",
+            description: "Creating an AI-powered meeting summary with Gemini.",
+          });
+
+          // Generate summary - show clear error if it fails
+          let summaryData: MeetingSummary | undefined;
+          
+          try {
+            const summaryResponse = await fetch('/api/summarize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                transcript: result.result.transcription.full_transcript,
+                speakers: result.result.speakers,
+                namedEntities: result.result.named_entities,
+              }),
+            });
+            
+            if (!summaryResponse.ok) {
+              const errorData = await summaryResponse.json();
+              throw new Error(`Summary generation failed: ${errorData.error || 'Unknown API error'}`);
+            }
+            
+            const summaryResponse_data = await summaryResponse.json();
+            if (!summaryResponse_data.success || !summaryResponse_data.summary) {
+              throw new Error('Summary API returned invalid response format');
+            }
+            
+            summaryData = summaryResponse_data.summary;
+            setCurrentSummary(summaryData || null);
+          } catch (summaryError) {
+            console.error('Summary generation failed:', summaryError);
+            // Continue without summary - don't fail the whole process
+          }
+          
+          // Save completed transcription to local storage
+          LocalStorageService.completeTranscription(
+            transcriptionId,
+            result,
+            summaryData
+          );
+          
+          toast({
+            title: "Processing complete!",
+            description: "Your audio has been transcribed and summarized successfully.",
+          });
+          
+          break;
+        } else if (result.status === 'error') {
+          throw new Error(`Transcription failed: ${result.error}`);
+        }
+        
+        attempts++;
+      }
+      
+      if (attempts >= maxAttempts) {
+        throw new Error('Transcription timeout - took too long to complete');
+      }
+      
+    } catch (error) {
+      console.error('Processing error:', error);
+      
+      // Mark transcription as failed in local storage
+      LocalStorageService.failTranscription(
+        transcriptionId,
+        error instanceof Error ? error.message : "An unexpected error occurred."
+      );
+      
+      toast({
+        title: "Processing failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleTranscriptionSelect = async (storedTranscription: StoredTranscription) => {
+    if (storedTranscription.status === 'processing') {
+      toast({
+        title: "Transcription in progress",
+        description: "This transcription is still being processed.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (storedTranscription.status === 'failed') {
+      toast({
+        title: "Transcription failed",
+        description: storedTranscription.error || "This transcription failed to process.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!storedTranscription.transcriptionData) {
+      toast({
+        title: "No transcription data",
+        description: "This transcription has no data available.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectedTranscriptionId(storedTranscription.id);
+    setCurrentTranscription(storedTranscription.transcriptionData);
+    setCurrentSummary(storedTranscription.summaryData || null);
+    
+    // If no summary exists and transcription is complete, try to generate one
+    if (!storedTranscription.summaryData && storedTranscription.transcriptionData) {
+      setIsProcessing(true);
+      
+      try {
+        const summaryResponse = await fetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcript: storedTranscription.transcriptionData.result.transcription.full_transcript,
+            speakers: storedTranscription.transcriptionData.result.speakers,
+            namedEntities: storedTranscription.transcriptionData.result.named_entities,
+          }),
+        });
+        
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json();
+          if (summaryData.success && summaryData.summary) {
+            setCurrentSummary(summaryData.summary);
+            
+            // Update local storage with the new summary
+            LocalStorageService.updateTranscription(storedTranscription.id, {
+              summaryData: summaryData.summary
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error generating summary:', error);
+        // Don't show error toast for optional summary generation
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-6">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-center mb-2">
+            Audio Transcription & Meeting Summary
+          </h1>
+          <p className="text-muted-foreground text-center">
+            Record audio, get AI-powered transcription with speaker diarization, and generate intelligent meeting summaries
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-12rem)]">
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <TranscriptionSidebar
+              onTranscriptionSelect={handleTranscriptionSelect}
+              selectedTranscriptionId={selectedTranscriptionId}
+            />
+          </div>
+
+          {/* Main Content */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Audio Recorder */}
+            <AudioRecorderComponent
+              onRecordingComplete={handleRecordingComplete}
+              onRecordingStart={() => {
+                setCurrentTranscription(null);
+                setCurrentSummary(null);
+                setSelectedTranscriptionId(undefined);
+              }}
+            />
+
+            {/* Transcript Display */}
+            <TranscriptDisplay
+              transcription={currentTranscription}
+              summary={currentSummary}
+              isLoading={isProcessing}
+            />
+          </div>
+        </div>
+      </div>
+      
+      <Toaster />
     </div>
   );
 }
