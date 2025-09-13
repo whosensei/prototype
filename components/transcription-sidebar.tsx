@@ -36,6 +36,7 @@ export function TranscriptionSidebar({
 
     try {
       const storedTranscriptions = LocalStorageService.getTranscriptions()
+      console.log("Loaded transcriptions:", storedTranscriptions.length, storedTranscriptions)
       setTranscriptions(storedTranscriptions)
       setError(null)
     } catch (err) {
@@ -128,6 +129,8 @@ export function TranscriptionSidebar({
     }
   }
 
+  console.log("TranscriptionSidebar rendering - collapsed:", isCollapsed, "transcriptions:", transcriptions.length)
+  
   return (
     <div className={`h-full flex flex-col bg-sidebar transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-80'}`}>
       {isCollapsed ? (
@@ -160,7 +163,7 @@ export function TranscriptionSidebar({
             {/* New Recording Button */}
             <button
               onClick={onNewRecording}
-              className="btn-minimal w-full flex items-center justify-center gap-2"
+              className="btn-new-recording-glass w-full flex items-center justify-center gap-2"
             >
               <Plus className="h-4 w-4" />
               New Recording
@@ -207,7 +210,7 @@ export function TranscriptionSidebar({
                   <div
                     className={`relative rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
                       selectedTranscriptionId === transcription.id
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        ? "sidebar-item-glass-active shadow-sm"
                         : "bg-card hover:bg-muted/50 border-border"
                     }`}
                     onClick={() => onTranscriptionSelect(transcription)}
@@ -217,7 +220,7 @@ export function TranscriptionSidebar({
                       <div className="mb-3">
                         <h3 className={`font-medium text-sm ${
                           selectedTranscriptionId === transcription.id
-                            ? "text-primary-foreground"
+                            ? "text-primary font-semibold"
                             : "text-foreground"
                         }`}>
                           {transcription.filename || `Recording ${index + 1}`}
@@ -228,7 +231,7 @@ export function TranscriptionSidebar({
                       <div className="flex items-center justify-between gap-2">
                         <div className={`flex items-center gap-1 text-xs ${
                           selectedTranscriptionId === transcription.id
-                            ? "text-primary-foreground/70"
+                            ? "text-primary/70"
                             : "text-muted-foreground"
                         }`}>
                           <Clock className="h-3 w-3 flex-shrink-0" />
@@ -238,7 +241,7 @@ export function TranscriptionSidebar({
                         {/* Status badge */}
                         <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                           selectedTranscriptionId === transcription.id
-                            ? "bg-primary-foreground/20 text-primary-foreground"
+                            ? "bg-primary/20 text-primary border border-primary/30"
                             : transcription.status === "completed"
                               ? "bg-green-100 text-green-700"
                               : transcription.status === "processing"

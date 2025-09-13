@@ -140,23 +140,23 @@ export function TabbedTranscriptDisplay({ transcription, summary, isLoading }: T
       <Tabs defaultValue="summary" className="h-full flex flex-col">
         <div className="border-b border-border bg-card">
           <div className="p-4">
-            <div className="tabs-modern max-w-md mx-auto">
-              <TabsList className="grid w-full grid-cols-3 bg-transparent p-0 h-auto rounded-none">
+            <div className="flex justify-center">
+              <TabsList className="tabs-blue-modern grid grid-cols-3 w-auto">
                 <TabsTrigger
                   value="summary"
-                  className="tab-trigger-modern"
+                  className="tab-blue-trigger"
                 >
                   Summary
                 </TabsTrigger>
                 <TabsTrigger
                   value="transcription"
-                  className="tab-trigger-modern"
+                  className="tab-blue-trigger"
                 >
                   Transcription
                 </TabsTrigger>
                 <TabsTrigger
                   value="full-transcription"
-                  className="tab-trigger-modern"
+                  className="tab-blue-trigger"
                 >
                   Full Text
                 </TabsTrigger>

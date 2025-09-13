@@ -234,7 +234,7 @@ export function AudioRecorderComponent({
               <button
                 onClick={startRecording}
                 disabled={!isInitialized}
-                className={`btn-record ${!isInitialized ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`btn-record-glass ${!isInitialized ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <Mic className="h-8 w-8 btn-record-icon" />
               </button>
